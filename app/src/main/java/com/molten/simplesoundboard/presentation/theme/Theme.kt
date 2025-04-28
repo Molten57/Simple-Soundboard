@@ -1,4 +1,4 @@
-package com.example.simplesoundboard.presentation.theme
+package com.molten.simplesoundboard.presentation.theme
 
 import androidx.compose.runtime.Composable
 import androidx.wear.compose.material.MaterialTheme

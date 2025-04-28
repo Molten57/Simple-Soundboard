@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Simple Soundboard"
 include(":app")
+include(":simplesoundboardcompanion")
