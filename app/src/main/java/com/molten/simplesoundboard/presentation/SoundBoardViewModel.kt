@@ -4,64 +4,57 @@ import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import kotlinx.serialization.json.Json
 import java.io.File
+import androidx.core.net.toUri
+import kotlinx.serialization.encodeToString
 
 class SoundboardViewModel : ViewModel() {
     private val _soundItems = mutableStateListOf<SoundButtonData>()
     val soundItems: SnapshotStateList<SoundButtonData> get() = _soundItems
 
     init {
-        val context = LocalContext.current
-
-        val file = File(context.filesDir, "soundboard_data.json")
-        if (file.exists()) {
-            val jsonString = file.readText()
-
-            val loadedSounds = Json.decodeFromString<List<SoundButtonSerializable>>(jsonString)
-
-            _soundItems.clear()
-
-            for (item in loadedSounds) {
-                _soundItems.add(
-                    SoundButtonData(
-                        id = item.id,
-                        label = item.label,
-                        imageUri = item.imageUri?.let { Uri.parse(it) },
-                        soundUri = item.soundUri?.let { Uri.parse(it) }
-                    )
-                )
-            }
-        }
-
-
-
-        // Always add the ADD_BUTTON at the end
         _soundItems.add(SoundButtonData(id = Int.MAX_VALUE, label = "ADD_BUTTON"))
     }
 
-    fun addSound(label: String, imageUri: Uri?, soundUri: Uri?) : SoundButtonData {
+    fun loadFromFile(context: Context) {
+        val file = File(context.filesDir, "soundboard_data.json")
+        if (!file.exists()) return
+
+        val jsonString = file.readText()
+
+        val loadedSounds = Json.decodeFromString<List<SoundButtonSerializable>>(jsonString)
+
+        for (item in loadedSounds) {
+            _soundItems.add(
+                SoundButtonData(
+                    id = item.id,
+                    label = item.label,
+                    imageUri = item.imageUri?.toUri(),
+                    audioUri = item.audioUri?.toUri()
+                )
+            )
+        }
+    }
+
+    fun addSound(label: String, imageUri: Uri?, audioUri: Uri?): SoundButtonData {
         val data = SoundButtonData(
             id = getNextId(),
             label = label,
             imageUri = imageUri,
-            soundUri = soundUri
+            audioUri = audioUri
         )
-
         _soundItems.add(data)
         return data
     }
 
-    private fun getNextId() : Int {
+    private fun getNextId(): Int {
         var toRet = 0
-
         for (soundButtonData in _soundItems) {
             if (soundButtonData.id > toRet) toRet = soundButtonData.id
         }
-
-        return ++toRet;
+        return ++toRet
     }
 
     fun saveSoundToFile(context: Context, sound: SoundButtonData) {
@@ -81,13 +74,11 @@ class SoundboardViewModel : ViewModel() {
                 id = sound.id,
                 label = sound.label,
                 imageUri = sound.imageUri?.toString(),
-                soundUri = sound.soundUri?.toString()
+                audioUri = sound.audioUri?.toString()
             )
         )
 
         val newJsonString = Json.encodeToString(existingSounds)
         file.writeText(newJsonString)
     }
-
-
 }

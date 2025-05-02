@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.net.toFile
 import com.google.android.gms.wearable.Asset
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
@@ -81,7 +82,7 @@ class MainActivity : ComponentActivity(), MessageClient.OnMessageReceivedListene
         pickAudioLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) {
                 val uri = result.data?.data ?: return@registerForActivityResult
-                sendAssetToWatch("sound", uri)
+                sendAssetToWatch("audio", uri)
             }
         }
     }

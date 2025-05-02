@@ -8,11 +8,12 @@ import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
+import android.text.format.Formatter
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.ScrollableDefaults
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,12 +36,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,6 +60,7 @@ import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -63,11 +70,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.material.Chip
+import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.PositionIndicator
 import androidx.wear.compose.material.Scaffold
@@ -75,7 +85,10 @@ import androidx.wear.compose.material.Text
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Icon
+import androidx.wear.compose.material3.IconButton
+import androidx.wear.compose.foundation.lazy.items
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
@@ -87,7 +100,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
+import java.util.UUID
 
 class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -127,11 +140,15 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
                         Log.d("aa", "InputStream available: ${inputStream.available()} bytes")
 
                         val context = this // Activity is a Context
-                        val uuid = java.util.UUID.randomUUID()
-                        val fileName = if (type == "image") "${uuid}_uploaded_image.jpg" else "${uuid}_uploaded_audio.mp3"
-                        val file = File(context.filesDir, fileName)
+                        val uuid = UUID.randomUUID()
+                        val fileName = if (type == "image") "${uuid}_uploaded_image" else "${uuid}_uploaded_audio"
 
-                        var output = FileOutputStream(file)
+                        val subDir = File(context.filesDir, type + "s")
+                        if (!subDir.exists()) subDir.mkdirs()
+
+                        val file = File(subDir, fileName)
+
+                        val output = FileOutputStream(file)
                         inputStream.copyTo(output)
 
                         val fileUri = file.toUri()
@@ -153,6 +170,9 @@ class MainActivity : ComponentActivity(), DataClient.OnDataChangedListener {
 fun SoundboardApp() {
     val navController = rememberNavController()
     val viewModel: SoundboardViewModel = viewModel()
+    val context = LocalContext.current
+
+    viewModel.loadFromFile(context)
 
     NavHost(navController = navController, startDestination = "main") {
         composable("main") {
@@ -165,15 +185,35 @@ fun SoundboardApp() {
         }
         composable("add") {
             AddSoundButtonScreen(
-                onConfirm = { label, imageUri, soundUri ->
-                    viewModel.addSound(label, imageUri, soundUri)
+                navController,
+
+                onSelectImage = {
+                    navController.currentBackStackEntry?.savedStateHandle?.remove<Uri>("selectedImage")
+                    navController.navigate("image_selection")
+                },
+
+                onSelectAudio = {
+//                    navController.currentBackStackEntry?.savedStateHandle?.remove<Uri>("selectedAudio")
+//                    navController.navigate("audio_selection")
+                },
+
+                onConfirm = { label, imageUri, audioUri ->
+                    val addedSound = viewModel.addSound(label, imageUri, audioUri)
+                    viewModel.saveSoundToFile(context, addedSound)
                     navController.popBackStack()
                 }
             )
         }
+        composable("image_selection") {
+            AssetSelection("image", navController)
+        }
+//        composable("audio_selection") {
+//            AssetSelection("audio", navController)
+//        }
     }
 }
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun SoundBoardScreen(
     viewModel: SoundboardViewModel,
@@ -249,7 +289,7 @@ fun SoundBoardScreen(
                                     } else {
                                         Button(
                                             onClick = {
-                                                playSound(context, sound.soundUri)
+                                                playSound(context, sound.audioUri)
                                             },
                                             shape = CircleShape,
                                             modifier = Modifier
@@ -315,7 +355,8 @@ fun playSound(context: Context, audioUri: Uri?) {
     mediaPlayer.reset()
     mediaPlayer.setAudioAttributes(audioAttributes)
     audioUri?.let {
-        mediaPlayer.setDataSource(context,
+        mediaPlayer.setDataSource(
+            context,
             it
         )
     }
@@ -325,7 +366,10 @@ fun playSound(context: Context, audioUri: Uri?) {
 
 @Composable
 fun AddSoundButtonScreen(
-    onConfirm: (label: String, imageUri: Uri?, soundUri: Uri?) -> Unit
+    navController: NavController,
+    onSelectImage: () -> Unit,
+    onSelectAudio: () -> Unit,
+    onConfirm: (label: String, imageUri: Uri?, audioUri: Uri?) -> Unit
 ) {
     val listState = rememberScalingLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -334,22 +378,31 @@ fun AddSoundButtonScreen(
 
     var label by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var soundUri by remember { mutableStateOf<Uri?>(null) }
+    var audioUri by remember { mutableStateOf<Uri?>(null) }
 
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) {
-        WearDataLayerListener.onImageReceived = { receivedUri  ->
-            Log.d("aa", "mega caller")
-            //val uri = saveAssetLocally(context, receivedUri, "image")
-            imageUri = receivedUri
-        }
-        WearDataLayerListener.onAudioReceived = { receivedUri  ->
-//            val uri = saveAssetLocally(context, receivedUri, "audio")
-            soundUri = receivedUri
-        }
-    }
+    val isFormValid = label.isNotBlank() && imageUri != null && audioUri != null
+    var showValidation by remember { mutableStateOf(false) }
 
+
+    val currentBackStackEntry = remember { navController.currentBackStackEntry }
+
+    LaunchedEffect(currentBackStackEntry) {
+        currentBackStackEntry?.savedStateHandle?.getLiveData<Uri>("selectedImage")
+            ?.observeForever { uri ->
+                imageUri = uri
+                currentBackStackEntry.savedStateHandle.remove<Uri>("selectedImage") // Prevent re-trigger
+            }
+    }
+//
+//    LaunchedEffect(currentBackStackEntry) {
+//        currentBackStackEntry?.savedStateHandle?.getLiveData<Uri>("selectedAudio")
+//            ?.observeForever { uri ->
+//                audioUri = uri
+//                currentBackStackEntry.savedStateHandle.remove<Uri>("selectedAudio") // Prevent re-trigger
+//            }
+//    }
 
     MaterialTheme {
         Box(
@@ -386,7 +439,8 @@ fun AddSoundButtonScreen(
                         Text(
                             "Sound Name",
                             textAlign = TextAlign.Center,
-                            color = Color.White
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -414,25 +468,35 @@ fun AddSoundButtonScreen(
                     }
                 }
 
+                if (showValidation && label.isBlank()) {
+                    item {
+                        Text(
+                            text = "Name is required",
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+
                 item {
                     Button(
                         onClick = {
-                            requestUpload("image", context, coroutineScope)
+                            onSelectImage()
                         },
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFBABCBE)
-                        ),
+                        shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)
-                            .padding(4.dp)
-
+                            .padding(horizontal = 8.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight()
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.add_photo),
@@ -452,20 +516,58 @@ fun AddSoundButtonScreen(
                     }
                 }
 
+                if (showValidation && imageUri == null) {
+                    item {
+                        Text(
+                            text = "Image is required",
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+
+
+
+                if (imageUri != null) {
+                    item {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp)
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(imageUri),
+                                contentDescription = "Selected image",
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                            )
+                            IconButton(onClick = { imageUri = null }) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove image",
+                                    tint = Color.Red
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Audio field, item 5
                 item {
                     Button(
                         onClick = {
-                            requestUpload("audio", context, coroutineScope)
+//                            onSelectAudio()
                         },
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFBABCBE)
-                        ),
+                        shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                         modifier = Modifier
-                            .width(150.dp)
+                            .fillMaxWidth()
                             .height(50.dp)
-                            .padding(4.dp)
-
+                            .padding(horizontal = 8.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -490,20 +592,66 @@ fun AddSoundButtonScreen(
                     }
                 }
 
+                if (showValidation && audioUri == null) {
+                    item {
+                        Text(
+                            text = "Audio is required",
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+
+
+                if (audioUri != null) {
+                    item {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp)
+                        ) {
+                            Text(
+                                text = audioUri!!.lastPathSegment ?: "Audio selected",
+                                color = Color.White,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { audioUri = null }) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove audio",
+                                    tint = Color.Red
+                                )
+                            }
+                        }
+                    }
+                }
+
                 item {
                     Button(
                         onClick = {
                             Log.d("aa", imageUri?.path.toString())
-                            onConfirm(label, imageUri, soundUri)
+                            Log.d("aa", audioUri?.path.toString())
+
+                            showValidation = true
+                            if (isFormValid) {
+                                onConfirm(label, imageUri, audioUri)
+                            } else {
+                                coroutineScope.launch {
+                                    val index =
+                                        if (label.isBlank()) 0 else if (imageUri == null) 1 else 5
+                                    listState.animateScrollToItem(index);
+                                }
+                            }
                         },
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4285F4)
-                        ),
+                        shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4)),
                         modifier = Modifier
-                            .width(150.dp)
+                            .fillMaxWidth()
                             .height(50.dp)
-                            .padding(4.dp)
+                            .padding(horizontal = 8.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -532,7 +680,6 @@ fun AddSoundButtonScreen(
 }
 
 
-
 suspend fun getConnectedPhoneNode(context: Context): String? {
     val nodes = Wearable.getNodeClient(context).connectedNodes.await()
     return nodes.find { it.isNearby }?.id
@@ -559,14 +706,12 @@ fun VolumeButton(context: Context) {
             val audioManager = context.getSystemService(AUDIO_SERVICE) as AudioManager
             audioManager.adjustVolume(AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI)
         },
-        shape = CircleShape,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF4285F4)
-        ),
+        shape = RoundedCornerShape(50),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4)),
         modifier = Modifier
-            .width(150.dp)
+            .fillMaxWidth()
             .height(50.dp)
-            .padding(4.dp)
+            .padding(horizontal = 8.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -626,6 +771,195 @@ fun AddButton(buttonSize: Dp, onAdd: () -> Unit) {
         modifier = Modifier.fillMaxWidth()
     )
 }
+
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
+@Composable
+fun AssetSelection(
+    assetKey: String,
+    navController: NavController
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val listState = rememberScalingLazyListState()
+    val assetUris = remember { mutableStateListOf<Uri>().apply {
+        when (assetKey) {
+            "image" -> addAll(getAllImageUris(context))
+            "audio" -> addAll(getAllAudioUri(context))
+        }
+    } }
+    val formattedAssetKey = assetKey.replaceFirstChar { it.titlecase() }
+
+    val toast = Toast.makeText(context, "$formattedAssetKey Uploaded", Toast.LENGTH_SHORT)
+
+    LaunchedEffect(Unit) {
+        WearDataLayerListener.onImageReceived = { receivedUri ->
+            Log.d("aa", "mega caller image")
+            if (receivedUri !in assetUris) {
+                assetUris.add(receivedUri)
+                toast.show()
+            }
+        }
+
+        WearDataLayerListener.onAudioReceived = { receivedUri ->
+            Log.d("aa", "mega caller audio")
+            if (receivedUri !in assetUris) {
+                assetUris.add(receivedUri)
+                toast.show()
+            }
+        }
+    }
+
+    ScalingLazyColumn(
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(10.dp)
+    ) {
+        item {
+            Chip(
+                label = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Image(
+                            painter = painterResource(id = R.drawable.phone),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Import $formattedAssetKey",
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                },
+                onClick = { requestUpload(assetKey, context, coroutineScope) },
+                colors = ChipDefaults.chipColors(
+                    backgroundColor = Color(0xFF4285F4),
+                    contentColor = Color.White
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        items(assetUris) { uri ->
+            val fileName = uri.lastPathSegment ?: formattedAssetKey
+            val fileSize = getFileSize(context, uri)
+
+            Chip(
+                label = {
+                    Text(
+                        text = fileName.take(20),
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                secondaryLabel = {
+                    Text(
+                        text = fileSize,
+                        color = Color.LightGray,
+                        maxLines = 1
+                    )
+                },
+                icon = {
+                    Image(
+                        painter = rememberAsyncImagePainter(uri),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                    )
+                },
+                onClick = {
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("selected${formattedAssetKey}}", uri)
+                    navController.popBackStack()
+                },
+                colors = ChipDefaults.chipColors(
+                    backgroundColor = Color.DarkGray,
+                    contentColor = Color.White
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+
+    Scaffold {
+        PositionIndicator(
+            scalingLazyListState = listState
+        )
+    }
+}
+
+fun getFileSize(context: Context, uri: Uri): String {
+    return try {
+        val file = File(uri.path ?: return "Unknown size")
+        if (file.exists()) {
+            val sizeInBytes = file.length()
+            Formatter.formatShortFileSize(context, sizeInBytes)
+        } else {
+            // Try fallback using content resolver
+            context.contentResolver.openAssetFileDescriptor(uri, "r")?.use {
+                val sizeInBytes = it.length
+                Formatter.formatShortFileSize(context, sizeInBytes)
+            } ?: "Unknown size"
+        }
+    } catch (e: Exception) {
+        "Unknown size"
+    }
+}
+
+
+fun getBundledAssetUris(context: Context, assetKey: String, names: List<String>): List<Uri> {
+    val uriList = mutableListOf<Uri>()
+
+    for (name in names) {
+        if (assetKey == "image") {
+            val resId = context.resources.getIdentifier(name.lowercase(), "drawable", context.packageName)
+            if (resId != 0) {
+                val uri = "android.resource://${context.packageName}/drawable/$name".toUri()
+                uriList.add(uri)
+            }
+        } else if (assetKey == "audio") {
+            val resId = context.resources.getIdentifier(name.lowercase(), "raw", context.packageName)
+            if (resId != 0) {
+                val uri = "android.resource://${context.packageName}/raw/$name".toUri()
+                uriList.add(uri)
+            }
+        }
+    }
+
+    return uriList
+}
+
+fun getUploadedAssetUris(context: Context, fileName: String): List<Uri> {
+    val assetDir = File(context.filesDir, fileName)
+    return assetDir.listFiles()?.map { it.toUri() } ?: emptyList()
+}
+
+fun getAllImageUris(context: Context): List<Uri> {
+    val bundled = getBundledAssetUris(context, "image", listOf("add_button"))
+    val uploaded = getUploadedAssetUris(context, "images")
+    return bundled + uploaded
+}
+
+fun getAllAudioUri(context: Context): List<Uri> {
+    val bundled = getBundledAssetUris(context, "audio", listOf("wario"))
+    val uploaded = getUploadedAssetUris(context, "audios")
+    return bundled + uploaded
+}
+
 
 //@Composable
 //fun VolumeController(context: Context) {

@@ -1,4 +1,5 @@
 [versions]
+accompanistNavigationAnimation = "0.34.0"
 agp = "8.9.2"
 coilCompose = "2.2.2"
 composeMaterialIconsExtended = "1.2.1"
@@ -23,6 +24,7 @@ lifecycleRuntimeKtx = "2.6.1"
 playServicesWearableVersion = "19.0.0"
 
 [libraries]
+accompanist-navigation-animation = { module = "com.google.accompanist:accompanist-navigation-animation", version.ref = "accompanistNavigationAnimation" }
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coilCompose" }
 compose-material-icons-extended = { module = "androidx.wear.compose:compose-material-icons-extended", version.ref = "composeMaterialIconsExtended" }
 jetbrains-kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServicesVersion" }

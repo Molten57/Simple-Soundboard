@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-04-26T22:41:13.036753800Z">
+        <DropdownSelection timestamp="2025-05-01T22:14:46.534983800Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="Default" identifier="serial=10.0.0.119:41203;connection=c846a0be" />
+              <DeviceId pluginId="Default" identifier="serial=10.0.0.119:41079;connection=5acb1132" />
             </handle>
           </Target>
         </DropdownSelection>
@@ -15,10 +15,10 @@
       </SelectionState>
       <SelectionState runConfigName="simplesoundboardcompanion">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-04-26T21:39:09.122269900Z">
+        <DropdownSelection timestamp="2025-05-01T22:14:33.243961700Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="Default" identifier="serial=10.0.0.68:40311;connection=9de92d07" />
+              <DeviceId pluginId="Default" identifier="serial=10.0.0.119:41079;connection=5acb1132" />
             </handle>
           </Target>
         </DropdownSelection>
